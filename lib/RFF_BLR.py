@@ -13,7 +13,7 @@ class RFF_BLR(object):
     def __init__(self):
         pass
 
-    def fit(self, x, y, x_tst = None, y_tst = None, gamma = 1., n_components=1000, 
+    def fit(self, x, y, x_tst = None, y_tst = None, gamma = .5, n_components=1000, 
             random_state=1, mult_gamma = False, maxit = 200, prune = True, 
             perc = False, pruning_crit = 1e-1, verbose = False, tol = 1e-6, links = False,
             gamma_param = False):
@@ -85,43 +85,31 @@ class RFF_BLR(object):
         self.gamma = gamma
         self.gamma_param = gamma_param
         if self.gamma_param:
-            gamma_ini = 31 # Values to test
             print('\rInitialising...', end='\r', flush=True)
-            LB = np.zeros(gamma_ini)
-            for i,gm in enumerate(np.logspace(-6, 3, gamma_ini)):
+            LB = np.zeros(10)
+            RFF_ini = []
+            # Random weight initialization
+            for i in range(len(LB)):
                 self.q_dist = Qdistribution(self.N, self.D, self.K, self.hyper)
-                self.RFF_model = RFF_optimizer(x, self.y,  
-                                            tau=self.q_dist.tau_mean(), 
-                                            alphas=self.q_dist.alpha_mean(), 
-                                            gamma=gm, n_components=n_components, 
-                                            random_state=random_state, 
-                                            mult_gamma=mult_gamma,
-                                            links = self.links)
-                self.z = self.RFF_model.get_RFF(x, self.input_idx).T #(KxN)
+                RFF_ini.append(RFF_optimizer(x, self.y, gamma=self.gamma, n_components=n_components, random_state=random_state, mult_gamma=mult_gamma, links = self.links))
+
+                self.z = RFF_ini[-1].get_RFF(x, self.input_idx).T #(KxN)
                 if self.tst:
-                    self.z_tst = self.RFF_model.get_RFF(x_tst, self.input_idx).T #(KxN_tst)
+                    self.z_tst = RFF_ini[-1].get_RFF(x_tst, self.input_idx).T #(KxN_tst)
                 
-                self.ZZT = self.z @ self.z.T  #(KxK) es enorme, habría que ver si se puede evitar este calculo
+                self.ZZT = self.z @ self.z.T  #(KxK)
                 self.YZT = y.T @ self.z.T  #(DxK) 
                 
                 self.update()
         
-                self.RFF_model.sgd_step(self.q_dist.W['mean'], self.q_dist.W['prodT'],
+                RFF_ini[-1].sgd_step(self.q_dist.W['mean'], self.q_dist.W['prodT'],
                                         self.q_dist.tau_mean(), self.q_dist.b['mean'], 
                                         1, self.input_idx)
                 
-                LB[i] = -self.RFF_model.L.item()
-            self.q_dist = Qdistribution(self.N, self.D, self.K, self.hyper, 
-                                        y = self.y, z = self.z)
+                LB[i] = -RFF_ini[-1].L.item()
+            self.q_dist = Qdistribution(self.N, self.D, self.K, self.hyper, y = self.y, z = self.z)
             # We start computing RFF 
-            self.RFF_model = RFF_optimizer(x, self.y,  
-                                           tau=self.q_dist.tau_mean(), 
-                                           alphas=self.q_dist.alpha_mean(), 
-                                           gamma=np.logspace(-6, 3, gamma_ini)[np.argmax(LB)], 
-                                           n_components=n_components, 
-                                           random_state=random_state, 
-                                           mult_gamma=mult_gamma,
-                                           links = self.links)
+            self.RFF_model = RFF_ini[np.argmax(LB)]
             self.z = self.RFF_model.get_RFF(x, self.input_idx).T #(KxN)
             if self.tst:
                 self.z_tst = self.RFF_model.get_RFF(x_tst, self.input_idx).T #(KxN_tst)
@@ -136,7 +124,7 @@ class RFF_BLR(object):
                                         y = self.y, z = self.z)
         
         # Some precomputed matrices
-        self.ZZT = self.z @ self.z.T  #(KxK) es enorme, habría que ver si se puede evitar este calculo
+        self.ZZT = self.z @ self.z.T  #(KxK)
         self.YZT = y.T @ self.z.T  #(DxK) 
         self.fit_vb(maxit, pruning_crit, prune, tol, perc, verbose)
             

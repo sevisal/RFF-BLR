@@ -5,7 +5,7 @@ from sklearn.utils import check_random_state
 
 class RFF_optimizer(torch.nn.Module):
 
-    def __init__(self, X, y, tau, alphas, lr=1e0, gamma=1., n_components=100, random_state=None, mult_gamma = False, links = False):
+    def __init__(self, X, y, lr=1e0, gamma=1., n_components=100, random_state=None, mult_gamma = False, links = False):
         '''
         This class computes and optimizes the gamma parameter of a RFF kernel approximation to a RBF kernel
         using the ELBO as the objective function.
@@ -48,13 +48,8 @@ class RFF_optimizer(torch.nn.Module):
         self.gamma = gamma
         self.n_components = n_components
         self.links = links
-        #self.random_state = random_state
         self.random_weights_unscaled_ = torch.from_numpy(random_state.normal(size=(n_features, self.n_components))).to(self.device)
-        #self.random_weights_ = np.sqrt(2 * self.gamma) * self.random_weights_unscaled_ 
         self.random_offset_ = torch.from_numpy(random_state.uniform(0, 2 * np.pi, size=self.n_components)).to(self.device)
-
-        self.tau = torch.from_numpy(np.array(tau)).to(self.device)
-        self.alphas = torch.from_numpy(alphas).to(self.device)
 
         #Internally, for the optimization, we work in log scale with gamma
         if mult_gamma:
@@ -66,13 +61,7 @@ class RFF_optimizer(torch.nn.Module):
         else:
             self.gamma_log = torch.nn.Parameter(torch.from_numpy(np.array(np.log(gamma))).to(self.device))
 
-        # Definir el kernel con una clase para eso
-        self.Z = None
-        # self.kernel = self.kernel_ky()
-
-        self.lr = lr
-        self.opt = torch.optim.Adam(self.parameters(), lr=self.lr)
-        self.sofplus = torch.nn.Softplus()
+        self.opt = torch.optim.Adam(self.parameters(), lr=lr)
         self.to(self.device)
 
     def computeRFF(self, X, input_idx):
